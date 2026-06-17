@@ -93,5 +93,62 @@
       <iframe title="Fugi neon ASCII visualizer" src="./index.html" allow="autoplay"></iframe>
     </div>
   </div>
+  <script>
+    const frame = document.querySelector("iframe");
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function installVerticalLyricBounds() {
+      const win = frame.contentWindow;
+      const doc = frame.contentDocument;
+      if (!win || !doc) return;
+
+      const style = doc.createElement("style");
+      style.textContent = `
+        .hack-card {
+          min-width: 0 !important;
+          width: max-content !important;
+          max-width: min(300px, 56vw) !important;
+          white-space: pre-wrap !important;
+        }
+      `;
+      doc.head.appendChild(style);
+
+      win.randomLyricPosition = function randomLyricPosition() {
+        const w = win.innerWidth;
+        const h = win.innerHeight;
+        const cardW = Math.min(300, Math.max(176, w * .56));
+        const cardH = 78;
+        const marginX = Math.max(18, w * .065);
+        const marginY = Math.max(24, h * .055);
+        const leftMin = (marginX / w) * 100;
+        const leftMax = ((w - marginX - cardW - 24) / w) * 100;
+        const topMin = (marginY / h) * 100;
+        const topMax = ((h - marginY - cardH - 24) / h) * 100;
+
+        let left = leftMin + Math.random() * Math.max(1, leftMax - leftMin);
+        let top = topMin + Math.random() * Math.max(1, topMax - topMin);
+
+        for (let attempt = 0; attempt < 18; attempt++) {
+          const x = (left / 100) * w;
+          const y = (top / 100) * h;
+          if (typeof win.isInsideHeadClearZone !== "function" || !win.isInsideHeadClearZone(x, y, w, h, 1.08)) {
+            break;
+          }
+          left = leftMin + Math.random() * Math.max(1, leftMax - leftMin);
+          top = topMin + Math.random() * Math.max(1, topMax - topMin);
+        }
+
+        return {
+          left: clamp(left, leftMin, leftMax),
+          top: clamp(top, topMin, topMax)
+        };
+      };
+    }
+
+    frame.addEventListener("load", installVerticalLyricBounds);
+  </script>
 </body>
 </html>
