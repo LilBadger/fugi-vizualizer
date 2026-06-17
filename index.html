@@ -1,0 +1,1274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neon ASCII Visualizer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --hot: #ff2eea;
+      --cyan: #19f7ff;
+      --lime: #8dff61;
+      --ink: #030314;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--ink);
+      color: white;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 44%, rgba(255, 46, 234, .22), transparent 24%),
+        radial-gradient(circle at 28% 28%, rgba(25, 247, 255, .2), transparent 28%),
+        linear-gradient(135deg, #030314 0%, #071295 50%, #16002f 100%);
+    }
+
+    .stage::before,
+    .stage::after {
+      content: "";
+      position: absolute;
+      inset: -6%;
+      pointer-events: none;
+    }
+
+    .stage::before {
+      opacity: .52;
+      background:
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, .1) 0 1px, transparent 1px 6px),
+        linear-gradient(90deg, transparent 0 11%, rgba(25, 247, 255, .12) 12%, transparent 13% 47%, rgba(255, 46, 234, .14) 48%, transparent 49% 100%);
+      mix-blend-mode: screen;
+      animation: scan 9s linear infinite;
+    }
+
+    .stage::after {
+      opacity: .35;
+      background-image:
+        linear-gradient(90deg, transparent 0 12%, rgba(255, 46, 234, .5) 12% 18%, transparent 18% 100%),
+        linear-gradient(90deg, transparent 0 68%, rgba(141, 255, 97, .42) 68% 70%, transparent 70% 100%),
+        linear-gradient(90deg, transparent 0 34%, rgba(25, 247, 255, .44) 34% 38%, transparent 38% 100%);
+      background-size: 100% 97px, 100% 131px, 100% 211px;
+      transform: skewY(-2deg);
+      mix-blend-mode: screen;
+      animation: drift 5.5s steps(8) infinite;
+    }
+
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      filter: saturate(1.25) contrast(1.08) drop-shadow(0 0 14px rgba(255, 46, 234, .45));
+    }
+
+    .hud {
+      position: fixed;
+      z-index: 3;
+      inset: 22px 24px auto 24px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      pointer-events: none;
+      font: 600 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: rgba(225, 247, 255, .84);
+      text-shadow: 0 0 14px rgba(25, 247, 255, .7);
+    }
+
+    .hud span {
+      display: block;
+    }
+
+    .hud strong {
+      color: var(--cyan);
+    }
+
+    .right {
+      text-align: right;
+      color: #ff67ed;
+      text-shadow: 0 0 14px rgba(255, 46, 234, .82);
+    }
+
+    .start {
+      position: fixed;
+      z-index: 5;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(3, 3, 20, .56);
+      backdrop-filter: blur(8px);
+      transition: opacity .25s ease, visibility .25s ease;
+    }
+
+    .start.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .panel {
+      width: min(430px, 88vw);
+      display: grid;
+      gap: 12px;
+      text-align: center;
+    }
+
+    .panel button {
+      border: 1px solid rgba(25, 247, 255, .72);
+      border-radius: 8px;
+      padding: 18px 22px;
+      color: white;
+      background:
+        linear-gradient(90deg, rgba(25, 247, 255, .18), rgba(255, 46, 234, .28)),
+        rgba(5, 10, 44, .88);
+      box-shadow:
+        0 0 24px rgba(25, 247, 255, .35),
+        0 0 70px rgba(255, 46, 234, .34),
+        inset 0 0 24px rgba(255, 255, 255, .06);
+      cursor: pointer;
+      font: 800 15px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      text-transform: uppercase;
+    }
+
+    .hint {
+      margin: 0;
+      color: rgba(225, 247, 255, .72);
+      font: 600 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      text-shadow: 0 0 12px rgba(25, 247, 255, .5);
+    }
+
+    .status {
+      position: fixed;
+      z-index: 4;
+      left: 24px;
+      right: 24px;
+      bottom: 18px;
+      min-height: 18px;
+      text-align: center;
+      color: rgba(230, 247, 255, .74);
+      font: 600 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      text-shadow: 0 0 16px rgba(25, 247, 255, .55);
+      pointer-events: none;
+    }
+
+    .glitch-layer {
+      position: fixed;
+      z-index: 2;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      font: 700 12px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .hack-card {
+      position: absolute;
+      min-width: 170px;
+      max-width: min(360px, 42vw);
+      padding: 10px 12px;
+      border-left: 2px solid rgba(25, 247, 255, .78);
+      background: rgba(3, 5, 28, .62);
+      color: rgba(185, 255, 246, .92);
+      box-shadow: 0 0 22px rgba(25, 247, 255, .25), inset 0 0 18px rgba(255, 46, 234, .08);
+      text-shadow: 0 0 9px rgba(25, 247, 255, .8);
+      white-space: pre;
+      opacity: 0;
+      transform: translate3d(0, 0, 0);
+      animation: hack-flicker var(--life, 1.3s) steps(7) forwards;
+    }
+
+    .hack-card.hot {
+      border-color: rgba(255, 46, 234, .85);
+      color: rgba(255, 151, 241, .94);
+      text-shadow: 0 0 10px rgba(255, 46, 234, .85);
+      box-shadow: 0 0 24px rgba(255, 46, 234, .28), inset 0 0 18px rgba(25, 247, 255, .07);
+    }
+
+    @keyframes hack-flicker {
+      0% { opacity: 0; clip-path: inset(0 100% 0 0); }
+      12% { opacity: .95; clip-path: inset(0 12% 0 0); }
+      18% { opacity: .2; transform: translateX(14px); }
+      24% { opacity: 1; transform: translateX(-8px); }
+      62% { opacity: .92; clip-path: inset(0 0 0 0); }
+      74% { opacity: .38; transform: translateX(18px); }
+      100% { opacity: 0; transform: translateX(-18px); clip-path: inset(0 0 0 100%); }
+    }
+
+    @keyframes scan {
+      from { transform: translateY(-3%); }
+      to { transform: translateY(3%); }
+    }
+
+    @keyframes drift {
+      0%, 100% { transform: translate(0, 0) skewY(-2deg); }
+      18% { transform: translate(2%, -1%) skewY(-2deg); }
+      20% { transform: translate(-1%, .5%) skewY(-2deg); }
+      56% { transform: translate(.5%, 1%) skewY(-2deg); }
+      58% { transform: translate(-2%, 0) skewY(-2deg); }
+    }
+
+    @media (max-width: 720px) {
+      .hud {
+        inset: 14px 14px auto 14px;
+        font-size: 10px;
+      }
+
+      .right span:nth-child(n+3),
+      .hud > div:first-child span:nth-child(n+3) {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" aria-label="Neon ASCII audio visualizer">
+    <canvas id="visualizer"></canvas>
+    <div class="hud" aria-hidden="true">
+      <div>
+        <span><strong>&gt; _FIR USER</strong></span>
+        <span>*** TRACE ACTIVE ***</span>
+        <span>LOC: BUCHAREST</span>
+        <span>SIGNAL: WAV/ASCII</span>
+      </div>
+      <div class="right">
+        <span>// SYSTEM_OVERRIDDEN</span>
+        <span>// FILTER_BYPASSED</span>
+        <span>// ASCII_HEAD: ON</span>
+        <span>// ECO_RENDER: ON</span>
+      </div>
+    </div>
+    <div class="glitch-layer" id="glitchLayer" aria-hidden="true"></div>
+    <div class="status" id="status">loading image signal...</div>
+    <div class="start" id="start">
+      <div class="panel">
+        <button id="startButton" type="button">Start Neon Transmission</button>
+        <p class="hint" id="hint">For Chrome, open this through the included launcher so local image/audio access is allowed.</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("visualizer");
+    const ctx = canvas.getContext("2d", { alpha: true });
+    const trailCanvas = document.createElement("canvas");
+    const trailCtx = trailCanvas.getContext("2d", { alpha: true });
+    const asciiCanvas = document.createElement("canvas");
+    const asciiCtx = asciiCanvas.getContext("2d", { alpha: true });
+    const start = document.getElementById("start");
+    const startButton = document.getElementById("startButton");
+    const status = document.getElementById("status");
+    const hint = document.getElementById("hint");
+    const glitchLayer = document.getElementById("glitchLayer");
+
+    const image = new Image();
+    image.src = "_tongue_in.png";
+
+    const audio = new Audio("F1r - Fugi.wav");
+    audio.preload = "auto";
+    audio.loop = true;
+    window.visualizerAudio = audio;
+
+    const chars = " .'`^,:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+    const crop = { x: 210, y: 48, w: 840, h: 940 };
+    const sample = document.createElement("canvas");
+    const sampleCtx = sample.getContext("2d", { willReadFrequently: true });
+
+    let audioCtx;
+    let analyser;
+    let source;
+    let frequencyData;
+    let timeData;
+    let audioState = {
+      bass: 0,
+      mids: 0,
+      treble: 0,
+      level: 0,
+      beat: 0,
+      tilt: 0,
+      tiltVelocity: 0,
+      pitch: 0,
+      pitchVelocity: 0,
+      roll: 0,
+      rollVelocity: 0,
+      push: 0,
+      pushVelocity: 0,
+      driftX: 0,
+      driftY: 0,
+      beatSide: 1,
+      yaw: 0,
+      yawVelocity: 0,
+      orbitPhase: 0,
+      motionSeed: 0,
+      lastAnalyzeAt: 0,
+      bassFloor: .08,
+      lastBeatAt: 0
+    };
+    let nextLyricIndex = 0;
+    let lastLyricClock = 0;
+    let lyricCues = [
+      { t: 7.23, text: "Pe fir" },
+      { t: 11.00, text: "Noaptea cade" },
+      { t: 15.04, text: "Peste noi" },
+      { t: 17.20, text: "Fugi, fugi, fugi" },
+      { t: 48.72, text: "Un mesaj fără ton" },
+      { t: 36.00, text: "Am furat lumină rece" },
+      { t: 39.20, text: "Din reclame și neon" },
+      { t: 47.21, text: "Mi-ai lăsat un semn pe hartă" },
+      { t: 50.00, text: "Și aud, aud, aud" },
+      { t: 53.00, text: "Inima-n rețea" },
+      { t: 54.14, text: "Printre fibre, printre umbre" },
+      { t: 56.01, text: "Cineva mă caută" },
+      { t: 58.00, text: "Nu mă prinde" },
+      { t: 59.00, text: "Nu mă strigă" },
+      { t: 60.05, text: "Nu mă ține pe pământ" },
+      { t: 62.00, text: "Sunt un nume fără față" },
+      { t: 64.00, text: "Sunt un cântec dus de vânt" },
+      { t: 68.05, text: "Fugi cu mine prin oraș" },
+      { t: 71.21, text: "Pe sub camere și ploi" },
+      { t: 75.22, text: "Noaptea nu ne dă de gol" },
+      { t: 79.16, text: "Suntem liberi amândoi" },
+      { t: 83.10, text: "Fugi cu mine, nu privi" },
+      { t: 87.08, text: "Tot ce arde e al nostru" },
+      { t: 91.00, text: "Din beton și din scântei" },
+      { t: 95.00, text: "Ne facem cerul nostru" },
+      { t: 98.00, text: "Fugi, fugi, fugi" },
+      { t: 99.84, text: "Pe fir, pe fir" },
+      { t: 102.00, text: "Nu ne vede nimeni" },
+      { t: 104.52, text: "Cod în vânt" },
+      { t: 106.00, text: "Fugi, fugi, fugi" },
+      { t: 113.00, text: "Am pe piele hărți ascunse" },
+      { t: 117.00, text: "Tu ai foc în ochii tăi" },
+      { t: 121.04, text: "Toată lumea doarme încă" },
+      { t: 124.10, text: "Noi dansăm printre scântei" },
+      { t: 128.00, text: "Și aud, aud, aud" },
+      { t: 130.00, text: "Cum se rupe liniștea" },
+      { t: 132.00, text: "Dintr-un server, dintr-o gară" },
+      { t: 134.00, text: "Dintr-o inimă prea grea" },
+      { t: 136.00, text: "Nu mă vinde" },
+      { t: 136.50, text: "Nu mă schimbă" },
+      { t: 137.06, text: "Nu mă pune într-un rând" },
+      { t: 139.12, text: "Sunt un nume fără față" },
+      { t: 141.00, text: "Sunt un cântec dus de vânt" },
+      { t: 145.00, text: "Fugi cu mine prin oraș" },
+      { t: 149.06, text: "Pe sub camere și ploi" },
+      { t: 153.00, text: "Noaptea nu ne dă de gol" },
+      { t: 157.00, text: "Suntem liberi amândoi" },
+      { t: 161.00, text: "Fugi cu mine, nu privi" },
+      { t: 165.00, text: "Tot ce arde e al nostru" },
+      { t: 168.00, text: "Din beton și din scântei" },
+      { t: 173.00, text: "Ne facem cerul nostru" },
+      { t: 190.08, text: "Lume, lume, nu mă știi" },
+      { t: 192.12, text: "Trec prin noapte printre vii" },
+      { t: 194.00, text: "Cu un dor fără stăpân" },
+      { t: 196.00, text: "Cod și sânge, foc și fum" }
+    ];
+    const backgroundGlitches = Array.from({ length: 82 }, (_, i) => ({
+      x: Math.random() * 2 - .5,
+      y: Math.random() * 1.24 - .12,
+      z: .35 + Math.random() * 1.8,
+      w: .025 + Math.random() * .18,
+      h: 2 + Math.random() * 12,
+      speed: .018 + Math.random() * .09,
+      drift: (Math.random() - .5) * .18,
+      phase: Math.random() * 100,
+      hue: i % 6,
+      alpha: .08 + Math.random() * .26,
+      jump: 1.1 + Math.random() * 5.2
+    }));
+    const backgroundHud = Array.from({ length: 24 }, (_, i) => ({
+      x: Math.random() * 2 - .5,
+      y: Math.random() * 1.18 - .09,
+      z: .45 + Math.random() * 1.65,
+      size: 7 + Math.random() * 28,
+      kind: i % 4,
+      phase: Math.random() * 80,
+      speed: .006 + Math.random() * .025,
+      alpha: .08 + Math.random() * .28
+    }));
+    let cells = [];
+    let columnDepth = [];
+    let textureCellW = 12;
+    let textureCellH = 16;
+    let columns = 84;
+    let rows = 56;
+    let charW = 10;
+    let charH = 14;
+    let drawCharW = 10;
+    let drawCharH = 14;
+    let gridLeft = 0;
+    let gridTop = 0;
+    let dpr = 1;
+    let loaded = false;
+    let running = false;
+    let glitchUntil = 0;
+    let lastKick = 0;
+    let lastFrame = 0;
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function toneMapChannel(value, lum) {
+      const compressed = value * (.72 + (1 - lum) * .22);
+      return Math.round(clamp(compressed, 0, 232));
+    }
+
+    function parseLrc(text) {
+      const parsed = [];
+      const linePattern = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\s*\]([^\r\n]*)/g;
+      for (const line of text.split(/\r?\n/)) {
+        linePattern.lastIndex = 0;
+        const matches = [...line.matchAll(linePattern)];
+        if (!matches.length) continue;
+
+        const lyric = matches[matches.length - 1][4].trim();
+        if (!lyric) continue;
+
+        for (const match of matches) {
+          const minutes = Number(match[1]);
+          const seconds = Number(match[2]);
+          const fraction = match[3] ? Number(`0.${match[3].padEnd(3, "0")}`) : 0;
+          parsed.push({ t: minutes * 60 + seconds + fraction, text: lyric });
+        }
+      }
+      return parsed.sort((a, b) => a.t - b.t);
+    }
+
+    async function loadLrcCues() {
+      try {
+        const response = await fetch("F1r - Fugi.lrc", { cache: "no-store" });
+        if (!response.ok) return;
+        const parsed = parseLrc(await response.text());
+        if (parsed.length) {
+          lyricCues = parsed;
+          nextLyricIndex = 0;
+          lastLyricClock = 0;
+        }
+      } catch (error) {
+        console.info("Using embedded lyric timings because the LRC file could not be loaded.", error);
+      }
+    }
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 1.35);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      trailCanvas.width = canvas.width;
+      trailCanvas.height = canvas.height;
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      trailCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      trailCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
+      const targetAspect = crop.w / crop.h;
+      const maxGridW = viewportW * .82;
+      const maxGridH = viewportH * .9;
+      let gridW = maxGridW;
+      let gridH = gridW / targetAspect;
+
+      if (gridH > maxGridH) {
+        gridH = maxGridH;
+        gridW = gridH * targetAspect;
+      }
+
+      const baseCellW = 8;
+      const baseCellH = 11;
+      columns = clamp(Math.floor(gridW / baseCellW), 86, 148);
+      rows = Math.max(36, Math.round(columns / targetAspect * (baseCellW / baseCellH)));
+      if (rows > 104) {
+        rows = 104;
+        columns = Math.max(54, Math.round(rows * targetAspect * (baseCellH / baseCellW)));
+      }
+
+      drawCharW = gridW / columns;
+      drawCharH = gridH / rows;
+      charW = baseCellW;
+      charH = baseCellH;
+      gridLeft = (viewportW - gridW) / 2;
+      gridTop = (viewportH - gridH) / 2 + viewportH * .015;
+      rebuildAscii();
+    }
+
+    function buildAsciiTexture() {
+      if (!cells.length) return;
+
+      textureCellW = 8;
+      textureCellH = 11;
+      asciiCanvas.width = columns * textureCellW;
+      asciiCanvas.height = rows * textureCellH;
+      asciiCtx.clearRect(0, 0, asciiCanvas.width, asciiCanvas.height);
+      asciiCtx.font = `700 ${textureCellH * .98}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+      asciiCtx.textBaseline = "top";
+      asciiCtx.globalCompositeOperation = "source-over";
+
+      columnDepth = Array.from({ length: columns }, () => ({ sum: 0, count: 0 }));
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < columns; x++) {
+          const cell = cells[y] && cells[y][x];
+          if (!cell) continue;
+
+          const px = x * textureCellW;
+          const py = y * textureCellH;
+          columnDepth[x].sum += cell.depth;
+          columnDepth[x].count++;
+
+          if (cell.neon) {
+            asciiCtx.fillStyle = "rgba(255, 46, 234, .16)";
+            asciiCtx.fillText(cell.ch, px + .9, py);
+            asciiCtx.fillStyle = "rgba(25, 247, 255, .1)";
+            asciiCtx.fillText(cell.ch, px - .8, py);
+          }
+
+          const tr = toneMapChannel(cell.r, cell.lum);
+          const tg = toneMapChannel(cell.g, cell.lum);
+          const tb = toneMapChannel(cell.b, cell.lum);
+          asciiCtx.fillStyle = `rgba(${tr}, ${tg}, ${tb}, ${clamp(.48 + cell.lum * .42, .36, .86)})`;
+          asciiCtx.fillText(cell.ch, px, py);
+        }
+      }
+
+      columnDepth = columnDepth.map((entry, x) => {
+        if (entry.count) return entry.sum / entry.count;
+        const nx = x / Math.max(1, columns - 1);
+        return Math.max(0, 1 - ((nx - .5) ** 2) / .24) * .22;
+      });
+    }
+
+    function isHeadPixel(r, g, b, a, nx, ny) {
+      if (a < 40) return false;
+      const hotPink = r > 175 && b > 120 && g < 120;
+      const orangeGlasses = r > 180 && g > 65 && g < 150 && b < 75;
+      const skin = r > 105 && g > 45 && g < 150 && b < 130;
+      const darkHair = r < 56 && g < 52 && b < 82 && ny > .12 && ny < .96;
+      const brightHighlight = r + g + b > 610;
+      const blueBackplate = b > 105 && b > r * 1.24 && b > g * 1.08 && !hotPink && !brightHighlight;
+      const hairCloud = ((nx - .5) ** 2) / .33 + ((ny - .54) ** 2) / .34 < 1.02 && ny > .13;
+      const earZone = ny < .5 && ((nx > .2 && nx < .43) || (nx > .57 && nx < .8));
+      if (blueBackplate && !earZone) return false;
+      return hotPink || orangeGlasses || skin || darkHair || brightHighlight || (hairCloud && !blueBackplate);
+    }
+
+    function rebuildAscii() {
+      if (!loaded || !canvas.width || !canvas.height) return;
+      sample.width = columns;
+      sample.height = rows;
+      sampleCtx.clearRect(0, 0, columns, rows);
+      sampleCtx.drawImage(image, crop.x, crop.y, crop.w, crop.h, 0, 0, columns, rows);
+
+      let data;
+      try {
+        data = sampleCtx.getImageData(0, 0, columns, rows).data;
+      } catch (error) {
+        status.textContent = "Chrome blocked local image access. Use open-neon-visualizer.cmd instead of opening the HTML directly.";
+        return;
+      }
+
+      cells = [];
+      for (let y = 0; y < rows; y++) {
+        const row = [];
+        for (let x = 0; x < columns; x++) {
+          const i = (y * columns + x) * 4;
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const a = data[i + 3];
+          const nx = x / Math.max(1, columns - 1);
+          const ny = y / Math.max(1, rows - 1);
+          if (!isHeadPixel(r, g, b, a, nx, ny)) {
+            row.push(null);
+            continue;
+          }
+          const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+          const sat = (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+          const index = clamp(Math.floor((lum * .85 + sat * .25) * (chars.length - 1)), 0, chars.length - 1);
+          const neon = sat > .45 || lum > .78;
+          const isDarkHair = r < 56 && g < 52 && b < 82 && ny > .12 && ny < .96;
+          const isOrangeGlasses = r > 180 && g > 65 && g < 150 && b < 75;
+          const faceDome = Math.max(0, 1 - ((nx - .5) ** 2) / .23 - ((ny - .56) ** 2) / .27);
+          const earRidges = ny < .48 ? Math.max(0, .75 - Math.abs(nx - .31) * 4.2) + Math.max(0, .75 - Math.abs(nx - .69) * 4.2) : 0;
+          const hairDepth = isDarkHair ? .18 : 0;
+          const glassesDepth = isOrangeGlasses ? -.16 : 0;
+          const depth = clamp(faceDome * .52 + earRidges * .34 + hairDepth + glassesDepth, -.18, .82);
+          row.push({ ch: chars[index], r, g, b, lum, neon, depth });
+        }
+        cells.push(row);
+      }
+      buildAsciiTexture();
+    }
+
+    function hzToBin(hz) {
+      if (!audioCtx || !analyser) return 0;
+      const nyquist = audioCtx.sampleRate / 2;
+      return clamp(Math.round((hz / nyquist) * frequencyData.length), 0, frequencyData.length - 1);
+    }
+
+    function hzBandEnergy(lowHz, highHz) {
+      if (!frequencyData || !audioCtx) return 0;
+      const from = hzToBin(lowHz);
+      const to = Math.max(from + 1, hzToBin(highHz));
+      let sum = 0;
+      let peak = 0;
+      let count = 0;
+      for (let i = from; i <= to && i < frequencyData.length; i++) {
+        const value = frequencyData[i] / 255;
+        sum += value;
+        peak = Math.max(peak, value);
+        count++;
+      }
+      return count ? (sum / count) * .72 + peak * .28 : 0;
+    }
+
+    function analyzeAudio(now) {
+      const dt = audioState.lastAnalyzeAt ? Math.min(.08, (now - audioState.lastAnalyzeAt) / 1000) : .033;
+      audioState.lastAnalyzeAt = now;
+
+      analyser.getByteFrequencyData(frequencyData);
+      analyser.getByteTimeDomainData(timeData);
+
+      let sumSquares = 0;
+      for (let i = 0; i < timeData.length; i++) {
+        const centered = (timeData[i] - 128) / 128;
+        sumSquares += centered * centered;
+      }
+
+      const rms = Math.sqrt(sumSquares / timeData.length);
+      const rawBass = hzBandEnergy(35, 145);
+      const rawMids = hzBandEnergy(145, 1450);
+      const rawTreble = hzBandEnergy(1450, 9000);
+      const attack = .58;
+      const release = .14;
+
+      audioState.bass += (rawBass - audioState.bass) * (rawBass > audioState.bass ? attack : release);
+      audioState.mids += (rawMids - audioState.mids) * (rawMids > audioState.mids ? .42 : .12);
+      audioState.treble += (rawTreble - audioState.treble) * (rawTreble > audioState.treble ? .46 : .16);
+      audioState.level += (rms - audioState.level) * (rms > audioState.level ? .55 : .16);
+
+      audioState.bassFloor += (rawBass - audioState.bassFloor) * .018;
+      const beatCandidate = rawBass - audioState.bassFloor;
+      const canBeat = now - audioState.lastBeatAt > 135;
+      if (beatCandidate > .16 && canBeat) {
+        audioState.beat = clamp(beatCandidate * 3.2, .35, 1);
+        audioState.beatSide *= -1;
+        audioState.motionSeed = (audioState.motionSeed + 1) % 4;
+        audioState.tiltVelocity += audioState.beatSide * audioState.beat * .055;
+        audioState.yawVelocity += audioState.beatSide * audioState.beat * .09;
+        audioState.pitchVelocity += (audioState.motionSeed % 2 ? 1 : -1) * audioState.beat * .045;
+        audioState.rollVelocity += (audioState.motionSeed < 2 ? 1 : -1) * audioState.beat * .035;
+        audioState.pushVelocity += audioState.beat * .09;
+        audioState.lastBeatAt = now;
+      } else {
+        audioState.beat *= .72;
+      }
+
+      audioState.orbitPhase += dt * (1.05 + audioState.level * 5.8 + audioState.bass * 3.9 + audioState.treble * 1.4);
+      const p = audioState.orbitPhase;
+      const songTime = Number.isFinite(audio.currentTime) ? audio.currentTime : now / 1000;
+      const section = Math.floor(songTime / 13) % 6;
+      const sectionPhase = songTime * (.24 + section * .035);
+      const sectionYaw = [1, -1, .45, -.7, 1.25, -.35][section];
+      const sectionPitch = [.4, 1.2, -.65, .9, -.25, 1.45][section];
+      const sectionRoll = [.15, -.7, 1.1, -.2, .85, -1.25][section];
+      const phraseSwing = Math.sin(sectionPhase) * .34 + Math.sin(sectionPhase * 2.17 + section) * .16;
+      const yawAmp = .2 + audioState.bass * .36 + audioState.level * .52 + audioState.beat * .22;
+      const pitchAmp = .07 + audioState.mids * .26 + audioState.level * .28;
+      const rollAmp = .035 + audioState.treble * .15 + audioState.beat * .1;
+      const yawTarget =
+        Math.sin(p * (1 + section * .035)) * yawAmp * sectionYaw +
+        Math.sin(p * .37 + 1.7 + section) * yawAmp * (.42 + Math.abs(phraseSwing)) +
+        phraseSwing * (.12 + audioState.level * .28) +
+        audioState.beatSide * audioState.beat * .1;
+      const tiltTarget =
+        Math.sin(p * .73 + .8) * (.035 + audioState.level * .12) +
+        audioState.beatSide * rawBass * .018;
+      const pitchTarget =
+        Math.sin(p * .62 + 2.1 + section) * pitchAmp * sectionPitch +
+        Math.sin(p * 1.31 + sectionPhase) * pitchAmp * .44;
+      const rollTarget =
+        Math.sin(p * .91 + 1.3) * rollAmp * sectionRoll +
+        Math.sin(p * 1.9 + section) * rollAmp * .42;
+      const pushTarget =
+        audioState.level * .18 +
+        audioState.bass * .16 +
+        audioState.beat * .22 +
+        Math.sin(p * .52 + .4 + section) * (.035 + audioState.level * .055) +
+        Math.max(0, phraseSwing) * (.035 + audioState.bass * .06);
+
+      audioState.tiltVelocity += (tiltTarget - audioState.tilt) * .07;
+      audioState.tiltVelocity *= .84;
+      audioState.tilt = clamp(audioState.tilt + audioState.tiltVelocity, -.18, .18);
+      audioState.yawVelocity += (yawTarget - audioState.yaw) * .085;
+      audioState.yawVelocity *= .86;
+      audioState.yaw = clamp(audioState.yaw + audioState.yawVelocity, -.98, .98);
+      audioState.pitchVelocity += (pitchTarget - audioState.pitch) * .07;
+      audioState.pitchVelocity *= .86;
+      audioState.pitch = clamp(audioState.pitch + audioState.pitchVelocity, -.32, .32);
+      audioState.rollVelocity += (rollTarget - audioState.roll) * .08;
+      audioState.rollVelocity *= .82;
+      audioState.roll = clamp(audioState.roll + audioState.rollVelocity, -.18, .18);
+      audioState.pushVelocity += (pushTarget - audioState.push) * .09;
+      audioState.pushVelocity *= .78;
+      audioState.push = clamp(audioState.push + audioState.pushVelocity, -.04, .42);
+      audioState.driftX =
+        Math.sin(p * (.39 + section * .03) + .2) * (14 + audioState.level * 52) +
+        Math.sin(p * 1.2 + section) * audioState.beat * 22 +
+        phraseSwing * 18;
+      audioState.driftY =
+        Math.sin(p * (.51 + section * .025) + 2.4) * (10 + audioState.mids * 34) -
+        audioState.beat * (12 + section * 1.5);
+
+      return audioState;
+    }
+
+    function randomLyricPosition() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      let left = 8 + Math.random() * 76;
+      let top = 8 + Math.random() * 76;
+
+      for (let attempt = 0; attempt < 12; attempt++) {
+        const x = (left / 100) * w;
+        const y = (top / 100) * h;
+        if (!isInsideHeadClearZone(x, y, w, h, 1.16)) break;
+        left = 5 + Math.random() * 82;
+        top = 6 + Math.random() * 80;
+      }
+
+      return { left, top };
+    }
+
+    function spawnLyricGlitch(text, strength = .5) {
+      const card = document.createElement("div");
+      const hot = Math.random() > .52;
+      card.className = `hack-card${hot ? " hot" : ""}`;
+      const pos = randomLyricPosition();
+      card.style.left = `${pos.left}%`;
+      card.style.top = `${pos.top}%`;
+      card.style.setProperty("--life", `${1400 + Math.random() * 900}ms`);
+
+      const tags = ["LYRIC_SIGNAL", "VOCAL_TRACE", "FIR_CHANNEL", "NOAPTE_TXT", "NEON_VOX"];
+      const tag = tags[Math.floor(Math.random() * tags.length)];
+      const signal = Math.round(clamp(strength, .1, 1) * 100);
+      card.textContent = `> ${tag} ${signal}%\n> ${text}`;
+      glitchLayer.appendChild(card);
+      window.setTimeout(() => card.remove(), 2600);
+    }
+
+    function updateLyricMessages(currentTime, strength = .5) {
+      if (!Number.isFinite(currentTime)) return;
+
+      if (currentTime < lastLyricClock - 1 || currentTime < lyricCues[Math.max(0, nextLyricIndex - 1)]?.t - 3) {
+        nextLyricIndex = lyricCues.findIndex((cue) => cue.t >= currentTime - .25);
+        if (nextLyricIndex < 0) nextLyricIndex = lyricCues.length;
+      }
+
+      lastLyricClock = currentTime;
+
+      while (nextLyricIndex < lyricCues.length && lyricCues[nextLyricIndex].t <= currentTime + .12) {
+        spawnLyricGlitch(lyricCues[nextLyricIndex].text, strength);
+        nextLyricIndex++;
+      }
+    }
+
+    function isInsideHeadClearZone(x, y, w, h, pad = 1) {
+      const cx = gridLeft + (columns * drawCharW) / 2;
+      const cy = gridTop + (rows * drawCharH) / 2;
+      const rx = Math.max(210, columns * drawCharW * .55) * pad;
+      const ry = Math.max(250, rows * drawCharH * .56) * pad;
+      const nx = (x - cx) / rx;
+      const ny = (y - cy) / ry;
+      return nx * nx + ny * ny < 1;
+    }
+
+    function drawProceduralCyberBackground(w, h, time, bass, mids, treble, beat) {
+      const bg = ctx.createLinearGradient(0, 0, w, h);
+      bg.addColorStop(0, "#020018");
+      bg.addColorStop(.2, "#041074");
+      bg.addColorStop(.52, "#0529ef");
+      bg.addColorStop(.78, "#061070");
+      bg.addColorStop(1, "#020013");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      const depthShift = Math.sin(time * .12) * 30;
+      for (let i = 0; i < 16; i++) {
+        const z = .45 + (i % 6) * .28;
+        const x = ((i * 197 + time * 16 / z + depthShift) % (w + 240)) - 120;
+        const y = ((i * 113 + Math.sin(time * .17 + i) * 32) % h);
+        const rw = (80 + (i % 5) * 56) / z;
+        const rh = (h * (.18 + (i % 3) * .07)) / z;
+        if (isInsideHeadClearZone(x + rw * .5, y + rh * .5, w, h, 1.14)) continue;
+        ctx.fillStyle = i % 2 ? "rgba(0, 22, 255, .075)" : "rgba(24, 247, 255, .045)";
+        ctx.fillRect(x, y, rw, rh);
+      }
+
+      ctx.globalAlpha = .72;
+      ctx.fillStyle = "rgba(0, 5, 40, .18)";
+      for (let y = 0; y < h; y += 3) {
+        ctx.fillRect(0, y + ((time * 18) % 3), w, 1);
+      }
+
+      ctx.restore();
+    }
+
+    function drawHudGlyph(ctx, kind, x, y, size, alpha) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(190, 235, 255, .72)";
+      ctx.fillStyle = "rgba(255, 255, 255, .8)";
+      if (kind === 0) {
+        ctx.strokeRect(x, y, size, size);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + size, y + size);
+        ctx.moveTo(x + size, y);
+        ctx.lineTo(x, y + size);
+        ctx.stroke();
+      } else if (kind === 1) {
+        ctx.strokeStyle = "rgba(120, 255, 75, .75)";
+        ctx.beginPath();
+        ctx.moveTo(x + size * .5, y - size * .6);
+        ctx.lineTo(x + size * .5, y + size * 1.6);
+        ctx.moveTo(x - size * .6, y + size * .5);
+        ctx.lineTo(x + size * 1.6, y + size * .5);
+        ctx.stroke();
+      } else if (kind === 2) {
+        for (let i = 0; i < 4; i++) {
+          for (let j = 0; j < 3; j++) {
+            if ((i + j) % 2) ctx.fillRect(x + i * size * .45, y + j * size * .45, 2, 2);
+          }
+        }
+      } else {
+        ctx.strokeStyle = "rgba(255, 46, 234, .68)";
+        ctx.beginPath();
+        ctx.moveTo(x, y + size * .5);
+        ctx.lineTo(x + size * .28, y + size * .2);
+        ctx.lineTo(x + size * .62, y + size * .62);
+        ctx.lineTo(x + size, y + size * .1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawMovingBackgroundGlitches(w, h, time, bass, mids, treble, beat) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+
+      for (const glitch of backgroundGlitches) {
+        const pulse = Math.max(0, Math.sin(time * glitch.jump + glitch.phase));
+        const audioKick = .35 + bass * .9 + treble * .45 + beat * 1.2;
+        const zScale = 1 / glitch.z;
+        const x = (((glitch.x + time * glitch.speed * zScale + Math.sin(time * .3 + glitch.phase) * glitch.drift) % 1.5) - .25) * w;
+        const y = (glitch.y + Math.sin(time * .19 + glitch.phase) * .025 + pulse * beat * .035) * h;
+        const width = (glitch.w * w) * zScale * (1 + pulse * audioKick * .72);
+        const height = (glitch.h + pulse * (5 + beat * 13)) * zScale;
+        const offset = (Math.random() - .5) * beat * 24;
+
+        if (pulse < .18 && Math.random() > .985 + treble * .01) continue;
+        if (isInsideHeadClearZone(x + width * .5, y + height * .5, w, h, 1.18)) continue;
+
+        const colors = [
+          `rgba(255, 38, 232, ${glitch.alpha * (.55 + audioKick * .55)})`,
+          `rgba(20, 246, 255, ${glitch.alpha * (.5 + mids * .8)})`,
+          `rgba(120, 255, 75, ${glitch.alpha * (.36 + treble * .7)})`,
+          `rgba(255, 255, 255, ${glitch.alpha * (.18 + beat * .24)})`,
+          `rgba(0, 0, 0, ${.24 + bass * .26})`
+        ];
+
+        ctx.fillStyle = colors[glitch.hue];
+        ctx.fillRect(x + offset, y, width, height);
+
+        if (pulse > .72 || beat > .42) {
+          ctx.fillStyle = glitch.hue === 4 ? "rgba(255, 46, 234, .34)" : "rgba(255,255,255,.24)";
+          ctx.fillRect(x - width * .12, y + height + 2, width * (.35 + pulse), 1 + beat * 3);
+        }
+      }
+
+      for (const hud of backgroundHud) {
+        const zScale = 1 / hud.z;
+        const x = (((hud.x + time * hud.speed * zScale) % 1.5) - .25) * w;
+        const y = (hud.y + Math.sin(time * .21 + hud.phase) * .02) * h;
+        if (isInsideHeadClearZone(x, y, w, h, 1.08)) continue;
+        drawHudGlyph(ctx, hud.kind, x, y, hud.size * zScale, hud.alpha * (1 + treble * .9));
+      }
+
+      ctx.globalAlpha = .42 + bass * .16;
+      ctx.fillStyle = "rgba(0, 9, 255, .11)";
+      for (let y = (time * 22) % 7; y < h; y += 7) {
+        ctx.fillRect(0, y, w, 1);
+      }
+
+      ctx.restore();
+    }
+
+    function drawBackground(time, bass, mids, treble, beat = 0) {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      drawProceduralCyberBackground(w, h, time, bass, mids, treble, beat);
+      drawMovingBackgroundGlitches(w, h, time, bass, mids, treble, beat);
+
+      const clearX = gridLeft + (columns * drawCharW) / 2;
+      const clearY = gridTop + (rows * drawCharH) / 2;
+      const clear = ctx.createRadialGradient(clearX, clearY, 20, clearX, clearY, Math.max(columns * drawCharW, rows * drawCharH) * .62);
+      clear.addColorStop(0, "rgba(0, 0, 20, .38)");
+      clear.addColorStop(.55, "rgba(0, 0, 28, .2)");
+      clear.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = clear;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 10; i++) {
+        const y = (i * 111 + time * (12 + treble * 60)) % (h + 90) - 45;
+        ctx.strokeStyle = i % 3 === 0 ? `rgba(255,46,234,${.06 + treble * .08 + beat * .08})` : `rgba(25,247,255,${.05 + mids * .06})`;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y + Math.sin(time * 1.5 + i) * 18);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawAscii(time, bass, mids, treble, beat = 0, level = 0, tilt = 0, yaw = 0, renderCtx = ctx, motion = null) {
+      if (asciiCanvas.width) {
+        drawAsciiTexture(time, bass, mids, treble, beat, level, tilt, yaw, renderCtx, motion);
+        return;
+      }
+
+      const g = renderCtx;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const wave = 3 + bass * 18 + beat * 38;
+      const ripple = 2 + mids * 12 + level * 42;
+      const fontSize = Math.max(8, drawCharH * (1.02 + beat * .045));
+      const gridW = columns * drawCharW;
+      const gridH = rows * drawCharH;
+      const breathe = 1 + level * .06 + beat * .1;
+      const depthScale = Math.min(gridW, gridH) * (.32 + beat * .08 + level * .1);
+      const camera = Math.min(gridW, gridH) * .92;
+
+      if (beat > .42 && performance.now() - lastKick > 135) {
+        glitchUntil = performance.now() + 70 + beat * 130;
+        lastKick = performance.now();
+      }
+
+      g.save();
+      g.translate(gridLeft + gridW / 2, gridTop + gridH / 2);
+      g.scale(breathe * (1 + Math.abs(tilt) * .1), breathe);
+      g.font = `700 ${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+      g.textBaseline = "top";
+      g.globalCompositeOperation = renderCtx === trailCtx ? "lighter" : "source-over";
+
+      const glitching = performance.now() < glitchUntil;
+      for (let y = 0; y < rows; y++) {
+        const rowJolt = glitching && y % 10 < 2 ? (Math.random() - .5) * 22 : 0;
+        const rowWave = Math.sin(y * .24 + time * (2.1 + bass * 3.2)) * wave;
+        const rowRipple = Math.sin(y * .48 - time * (4.2 + mids * 2.4)) * ripple * (y / rows);
+        for (let x = 0; x < columns; x++) {
+          const cell = cells[y] && cells[y][x];
+          if (!cell) continue;
+          const nx = x / columns - .5;
+          const ny = y / rows - .5;
+          const localX = x * drawCharW - gridW / 2;
+          const localY = y * drawCharH - gridH / 2;
+          const localZ = (cell.depth - .25) * depthScale;
+          const cosY = Math.cos(yaw);
+          const sinY = Math.sin(yaw);
+          const cosX = Math.cos(tilt * .55);
+          const sinX = Math.sin(tilt * .55);
+          const rotatedX = localX * cosY + localZ * sinY;
+          const zAfterYaw = localZ * cosY - localX * sinY;
+          const rotatedY = localY * cosX - zAfterYaw * sinX;
+          const rotatedZ = localY * sinX + zAfterYaw * cosX;
+          const perspective = clamp(camera / Math.max(camera * .32, camera - rotatedZ), .52, 1.62);
+          const kickBulge = Math.sin(Math.hypot(nx, ny) * 22 - time * 18) * beat * 18;
+          const dx = rowWave + rowRipple + rowJolt;
+          const dy = Math.sin(x * .18 + time * 2.1) * treble * 4 + kickBulge * ny;
+          const px = rotatedX * perspective + dx + kickBulge * nx;
+          const py = rotatedY * perspective + dy;
+          const depthLight = clamp((rotatedZ / camera) * .42 + .9, .45, 1.28);
+          const alpha = clamp((.3 + cell.lum * .75 + bass * .13 + beat * .12) * clamp(perspective, .58, 1.42) * depthLight, .16, .98);
+          const sizeBoost = clamp(perspective, .66, 1.46);
+
+          if (cell.neon) {
+            g.fillStyle = `rgba(255, 46, 234, ${.18 + bass * .22 + beat * .24})`;
+            g.fillText(cell.ch, px + 1.8 + bass * 2 + beat * 4, py);
+            g.fillStyle = `rgba(25, 247, 255, ${.14 + treble * .2 + beat * .12})`;
+            g.fillText(cell.ch, px - 1.8 - treble * 2 - beat * 3, py);
+          }
+
+          if (glitching && Math.random() < .018 + treble * .025 + beat * .035) {
+            g.fillStyle = Math.random() > .5 ? "#19f7ff" : "#ff2eea";
+          } else {
+            g.fillStyle = `rgba(${cell.r}, ${Math.max(cell.g, 45)}, ${Math.max(cell.b, 90)}, ${alpha})`;
+          }
+          if (sizeBoost > 1.03) {
+            g.save();
+            g.translate(px, py);
+            g.scale(sizeBoost, sizeBoost);
+            g.fillText(cell.ch, 0, 0);
+            g.restore();
+            continue;
+          }
+          g.fillText(cell.ch, px, py);
+        }
+      }
+      g.restore();
+    }
+
+    function drawAsciiTexture(time, bass, mids, treble, beat = 0, level = 0, tilt = 0, yaw = 0, renderCtx = ctx, motion = null) {
+      const g = renderCtx;
+      const gridW = columns * drawCharW;
+      const gridH = rows * drawCharH;
+      const pitch = motion ? motion.pitch : Math.sin(time * .65) * level * .18;
+      const roll = motion ? motion.roll : Math.sin(time * .9) * treble * .08;
+      const push = motion ? motion.push : level * .12 + beat * .08;
+      const driftX = motion ? motion.driftX : 0;
+      const driftY = motion ? motion.driftY : 0;
+      const breathe = 1 + level * .04 + beat * .08 + push * .34;
+      const depthScale = Math.min(gridW, gridH) * (.42 + beat * .08 + level * .1);
+      const camera = Math.min(gridW, gridH) * (.95 - push * .18);
+      const wave = 4 + bass * 24 + beat * 30;
+      const ripple = 2 + mids * 12 + level * 28;
+
+      if (beat > .42 && performance.now() - lastKick > 135) {
+        glitchUntil = performance.now() + 70 + beat * 130;
+        lastKick = performance.now();
+      }
+
+      const glitching = performance.now() < glitchUntil;
+      const cosY = Math.cos(yaw);
+      const sinY = Math.sin(yaw);
+      const pitchTotal = tilt * .35 + pitch;
+      const cosX = Math.cos(pitchTotal);
+      const sinX = Math.sin(pitchTotal);
+      const srcW = textureCellW;
+      const srcH = asciiCanvas.height;
+
+      g.save();
+      g.translate(gridLeft + gridW / 2 + driftX, gridTop + gridH / 2 + driftY);
+      g.rotate(roll);
+      g.scale(breathe, breathe);
+      g.globalCompositeOperation = "lighter";
+      g.imageSmoothingEnabled = true;
+
+      for (let x = 0; x < columns; x++) {
+        const nx = x / Math.max(1, columns - 1) - .5;
+        const localX = (x + .5) * drawCharW - gridW / 2;
+        const localZ = ((columnDepth[x] || 0) - .22) * depthScale;
+          const rotatedX = localX * cosY + localZ * sinY;
+          const zAfterYaw = localZ * cosY - localX * sinY;
+        const rotatedY = -zAfterYaw * sinX;
+        const rotatedZ = zAfterYaw * cosX;
+        const perspective = clamp(camera / Math.max(camera * .34, camera - rotatedZ), .56, 1.55);
+          const waveX = Math.sin(x * .18 + time * (2.4 + bass * 3.2)) * wave;
+          const waveY = Math.sin(x * .31 - time * (3.2 + mids * 2.2)) * ripple * .36 + Math.sin(x * .09 + time * 1.4) * pitch * 18;
+        const kick = Math.sin(Math.abs(nx) * 14 - time * 18) * beat * 16 * nx;
+        const rowJolt = glitching && x % 13 < 2 ? (Math.random() - .5) * 30 : 0;
+        const destW = drawCharW * perspective * (1 + Math.abs(yaw) * .06);
+        const destH = gridH * perspective * (1 - Math.abs(tilt) * .08);
+        const dx = rotatedX * perspective + waveX + kick + rowJolt - destW / 2;
+        const dy = rotatedY * perspective + waveY - destH / 2;
+
+        g.globalAlpha = clamp(.7 + perspective * .25, .5, 1);
+        if (renderCtx === trailCtx) {
+          g.globalAlpha *= .62;
+        }
+        g.drawImage(
+          asciiCanvas,
+          x * textureCellW,
+          0,
+          srcW,
+          srcH,
+          dx,
+          dy,
+          destW,
+          destH
+        );
+      }
+
+      if (glitching) {
+        g.globalAlpha = .18 + beat * .18;
+        for (let i = 0; i < 3; i++) {
+          const sx = Math.floor(Math.random() * columns) * textureCellW;
+          const sw = textureCellW * (2 + Math.floor(Math.random() * 5));
+          const dx = (Math.random() - .5) * gridW;
+          const dy = (Math.random() - .5) * gridH;
+          g.drawImage(asciiCanvas, sx, 0, sw, srcH, dx, dy, sw * (drawCharW / textureCellW), gridH);
+        }
+      }
+
+      g.restore();
+    }
+
+    function drawIdle(time) {
+      const bass = .26 + Math.sin(time * 1.8) * .16;
+      const mids = .3 + Math.sin(time * 2.4 + 1.4) * .16;
+      const treble = .34 + Math.sin(time * 3.8 + 2.1) * .18;
+      drawBackground(time, bass, mids, treble, 0);
+      drawAscii(time, bass, mids, treble, 0, .25, Math.sin(time * .75) * .045, Math.sin(time * .55) * .28, ctx, {
+        pitch: Math.sin(time * .48) * .12,
+        roll: Math.sin(time * .62) * .04,
+        push: .06 + Math.sin(time * .72) * .03,
+        driftX: Math.sin(time * .38) * 18,
+        driftY: Math.sin(time * .52) * 10
+      });
+    }
+
+    function frame(now) {
+      if (now - lastFrame < 16) {
+        requestAnimationFrame(frame);
+        return;
+      }
+      lastFrame = now;
+      const time = now / 1000;
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+      if (analyser && frequencyData && running) {
+        const signal = analyzeAudio(now);
+        updateLyricMessages(audio.currentTime, Math.max(signal.beat, signal.treble, signal.level));
+
+        trailCtx.save();
+        trailCtx.globalCompositeOperation = "destination-out";
+        trailCtx.fillStyle = `rgba(0, 0, 0, ${.14 - signal.beat * .035})`;
+        trailCtx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+        trailCtx.restore();
+
+        trailCtx.save();
+        trailCtx.globalAlpha = .12 + signal.level * .1 + signal.beat * .045;
+        trailCtx.filter = `blur(${.8 + signal.level * 1.4}px) saturate(1.35)`;
+        drawAscii(
+          time - .035,
+          signal.bass * .72,
+          signal.mids * .66,
+          signal.treble * .62,
+          signal.beat * .38,
+          signal.level * .65,
+          signal.tilt * .9,
+          signal.yaw - Math.sign(signal.yaw || 1) * (.045 + signal.beat * .035),
+          trailCtx,
+          {
+            pitch: signal.pitch * .85,
+            roll: signal.roll * .8,
+            push: signal.push * .7,
+            driftX: signal.driftX * .82,
+            driftY: signal.driftY * .82
+          }
+        );
+        trailCtx.restore();
+
+        trailCtx.save();
+        trailCtx.globalAlpha = .045 + signal.level * .065 + signal.beat * .045;
+        trailCtx.filter = `blur(${2.2 + signal.beat * 1.1}px) saturate(1.45)`;
+        drawAscii(
+          time - .09,
+          signal.bass * .52,
+          signal.mids * .5,
+          signal.treble * .5,
+          signal.beat * .28,
+          signal.level * .52,
+          signal.tilt * .7,
+          -signal.yaw * .72,
+          trailCtx,
+          {
+            pitch: -signal.pitch * .62,
+            roll: signal.roll * 1.25,
+            push: signal.push * 1.08 + .04,
+            driftX: -signal.driftX * 1.15,
+            driftY: signal.driftY * .92 + Math.sin(time * 2.1) * 18
+          }
+        );
+        trailCtx.restore();
+
+        drawBackground(time, signal.bass, signal.mids, signal.treble, signal.beat);
+        ctx.save();
+        ctx.globalAlpha = .5;
+        ctx.globalCompositeOperation = "lighter";
+        ctx.drawImage(trailCanvas, 0, 0, window.innerWidth, window.innerHeight);
+        ctx.restore();
+        drawAscii(time, signal.bass, signal.mids, signal.treble, signal.beat, signal.level, signal.tilt, signal.yaw, ctx, signal);
+        status.textContent = `bass ${(signal.bass * 100) | 0}%  /  beat ${(signal.beat * 100) | 0}%  /  level ${(signal.level * 100) | 0}%`;
+      } else {
+        drawIdle(time);
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    async function startAudio() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 2048;
+          analyser.smoothingTimeConstant = .38;
+          frequencyData = new Uint8Array(analyser.frequencyBinCount);
+          timeData = new Uint8Array(analyser.fftSize);
+          source = audioCtx.createMediaElementSource(audio);
+          source.connect(analyser);
+          analyser.connect(audioCtx.destination);
+        }
+        await audioCtx.resume();
+        await audio.play();
+        running = true;
+        start.classList.add("is-hidden");
+        status.textContent = "signal locked";
+      } catch (error) {
+        console.error(error);
+        status.textContent = "Chrome blocked local audio access. Use open-neon-visualizer.cmd instead of opening the HTML directly.";
+        hint.textContent = "Use the included launcher file, then click Start again in the opened browser tab.";
+      }
+    }
+
+    image.onload = () => {
+      loaded = true;
+      resize();
+      status.textContent = window.location.protocol === "file:"
+        ? "image ready; Chrome may need the included launcher for sound"
+        : "image signal ready";
+    };
+
+    image.onerror = () => {
+      status.textContent = "image could not load; keep _tongue_in.png beside this HTML page";
+    };
+
+    audio.onerror = () => {
+      status.textContent = "audio could not load; keep F1r - Fugi.wav beside this HTML page";
+    };
+
+    startButton.addEventListener("click", startAudio);
+    window.startVisualizerAudio = startAudio;
+    window.addEventListener("resize", resize);
+
+    if (window.location.protocol === "file:") {
+      hint.textContent = "If Chrome shows no sound or ASCII, run open-neon-visualizer.cmd in this folder.";
+    }
+
+    requestAnimationFrame(frame);
+    loadLrcCues();
+  </script>
+</body>
+</html>
